@@ -36,11 +36,9 @@ import {
   BotIcon,
   CircleDollarSignIcon,
   Clock,
-  Download,
+  DownloadIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { pdf } from "@react-pdf/renderer";
-import { TripPlanPDF } from "@/components/TripPlanPdf";
 
 type Trip = {
   id: string;
@@ -203,11 +201,11 @@ export default function Home() {
   const [tripToDelete, setTripToDelete] = useState<string | null>(null);
   const [dailyLimitReached, setDailyLimitReached] = useState(false);
 
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
-
   const hasResults = Boolean(answer || loading || error || activeTripId);
 
   const submissionInProgress = useRef(false);
+
+  const articleRef = useRef<HTMLElement>(null);
 
   // Restore saved trips once on the client.
   useEffect(() => {
@@ -305,33 +303,20 @@ export default function Home() {
     },
     [activeTripId, resetTrip],
   );
+
   const handleDownloadPdf = async () => {
-    if (!answer.trim() || downloadingPdf) return;
-
-    setDownloadingPdf(true);
-
-    try {
-      const title = makeTripTitle(prompt);
-      const blob = await pdf(
-        <TripPlanPDF title={title} answer={answer} />,
-      ).toBlob();
-
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-
-      link.href = url;
-      link.download = `${title.replace(/[^\w-]+/g, "-").replace(/-+/g, "-") || "tripsync-itinerary"}.pdf`;
-
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error("PDF generation failed:", err);
-      setError("Unable to generate the PDF. Please try again.");
-    } finally {
-      setDownloadingPdf(false);
-    }
+    if (!articleRef.current) return;
+    const html2pdf = (await import("html2pdf.js")).default; // dynamic import: client-only
+    await html2pdf()
+      .from(articleRef.current)
+      .set({
+        margin: 10,
+        filename: "tripsync-itinerary.pdf",
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: "mm", format: "a4" },
+        pagebreak: { mode: ["css", "legacy"] },
+      })
+      .save();
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -900,23 +885,13 @@ export default function Home() {
                         <Plus size={16} />
                         New trip
                       </button>
-                      {answer && (
-                        <button
-                          type="button"
-                          onClick={handleDownloadPdf}
-                          disabled={downloadingPdf}
-                          className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#dfe6db] bg-white px-4 py-2.5 text-sm font-semibold transition hover:bg-[#f0f4ec] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-                        >
-                          {downloadingPdf ? (
-                            <LoaderCircle size={16} className="animate-spin" />
-                          ) : (
-                            <Download size={16} />
-                          )}
-                          {downloadingPdf
-                            ? "Generating PDF..."
-                            : "Download PDF"}
-                        </button>
-                      )}
+                      <button
+                        onClick={handleDownloadPdf}
+                        className="inline-flex w-full shrink-0 cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#dfe6db] bg-white px-4 py-2.5 text-sm font-semibold transition hover:bg-[#f0f4ec] sm:w-auto"
+                      >
+                        <DownloadIcon size={16} />
+                        Download PDF
+                      </button>
                     </div>
                   </div>
 
@@ -986,7 +961,10 @@ export default function Home() {
                         </div>
                       </div>
 
-                      <article className="markdown-content min-w-0 overflow-x-auto px-4 py-5 text-sm leading-7 sm:px-7 sm:py-8">
+                      <article
+                        ref={articleRef}
+                        className="markdown-content min-w-0 overflow-x-auto px-4 py-5 text-sm leading-7 sm:px-7 sm:py-8"
+                      >
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
                           components={{

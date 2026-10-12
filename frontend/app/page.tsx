@@ -314,7 +314,6 @@ export default function Home() {
         filename: "tripsync-itinerary.pdf",
         html2canvas: { scale: 2 },
         jsPDF: { unit: "mm", format: "a4" },
-        pagebreak: { mode: ["css", "legacy"] },
       })
       .save();
   };

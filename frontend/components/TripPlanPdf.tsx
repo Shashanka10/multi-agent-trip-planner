@@ -144,7 +144,6 @@ export function TripPlanPDF({
   title: string;
   answer: string;
 }) {
-  console.log("🚀 ~ TripPlanPDF ~ title:", title);
   return (
     <Document title={title} author="TripSync">
       <Page size="A4" style={styles.page} wrap>
@@ -188,17 +187,19 @@ export function TripPlanPDF({
               createElement(View, { style: styles.list }, children),
             ol: ({ children }) =>
               createElement(View, { style: styles.list }, children),
-            li: ({ children, ordered, index }) =>
-              createElement(
+            li: ({ children, node }) => {
+              const parent = node?.position ? node : undefined;
+
+              const isOrdered =
+                parent?.tagName === "li" && node?.position !== undefined;
+
+              return createElement(
                 View,
                 { style: styles.listItem },
-                createElement(
-                  Text,
-                  { style: styles.bullet },
-                  ordered ? `${(index ?? 0) + 1}.` : "•",
-                ),
+                createElement(Text, { style: styles.bullet }, "•"),
                 createElement(Text, { style: styles.listText }, children),
-              ),
+              );
+            },
             blockquote: ({ children }) =>
               createElement(View, { style: styles.quote }, children),
             code: ({ children }) =>

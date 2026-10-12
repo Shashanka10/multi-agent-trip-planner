@@ -36,8 +36,11 @@ import {
   BotIcon,
   CircleDollarSignIcon,
   Clock,
+  Download,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { pdf } from "@react-pdf/renderer";
+import { TripPlanPDF } from "@/components/TripPlanPdf";
 
 type Trip = {
   id: string;
@@ -85,13 +88,13 @@ const suggestions: Suggestion[] = [
   },
 ];
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://multi-agent-trip-planner-5vyw.onrender.com";
 
 function makeTripTitle(prompt: string) {
   const cleaned = prompt.replace(/\s+/g, " ").trim();
-  return cleaned.length > 48
-    ? `${cleaned.slice(0, 48).trim()}…`
-    : cleaned || "New trip";
+  return cleaned || "New trip";
 }
 
 function toText(value: unknown): string {
@@ -200,6 +203,8 @@ export default function Home() {
   const [tripToDelete, setTripToDelete] = useState<string | null>(null);
   const [dailyLimitReached, setDailyLimitReached] = useState(false);
 
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
   const hasResults = Boolean(answer || loading || error || activeTripId);
 
   const submissionInProgress = useRef(false);
@@ -300,6 +305,34 @@ export default function Home() {
     },
     [activeTripId, resetTrip],
   );
+  const handleDownloadPdf = async () => {
+    if (!answer.trim() || downloadingPdf) return;
+
+    setDownloadingPdf(true);
+
+    try {
+      const title = makeTripTitle(prompt);
+      const blob = await pdf(
+        <TripPlanPDF title={title} answer={answer} />,
+      ).toBlob();
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = `${title.replace(/[^\w-]+/g, "-").replace(/-+/g, "-") || "tripsync-itinerary"}.pdf`;
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      setError("Unable to generate the PDF. Please try again.");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -467,7 +500,7 @@ export default function Home() {
           onClick={resetTrip}
           title={collapsed ? "TripSync home" : undefined}
           aria-label="TripSync home"
-          className={`mb-8 flex w-full shrink-0 items-center gap-3 text-left ${
+          className={`mb-8 flex w-full shrink-0 items-center gap-3 cursor-pointer text-left ${
             collapsed ? "justify-center" : ""
           }`}
         >
@@ -491,15 +524,16 @@ export default function Home() {
         <button
           onClick={resetTrip}
           title={collapsed ? "Plan a new trip" : undefined}
-          className={`flex w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-[#183d31] px-3 py-3.5 text-sm font-semibold text-white shadow-md shadow-emerald-950/10 transition hover:bg-[#245442] ${
+          className={`flex w-full shrink-0 items-center cursor-pointer justify-center gap-2 rounded-xl bg-[#183d31] px-3 py-3.5 text-sm font-semibold text-white shadow-md shadow-emerald-950/10 transition hover:bg-[#245442] ${
             collapsed ? "" : "justify-start px-4"
           }`}
         >
           <Plus size={18} className="shrink-0" />
-          {dailyLimitReached ? (
-            <span>Daily limit reached</span>
-          ) : (
-            <span>Plan a new trip</span>
+
+          {!collapsed && (
+            <span>
+              {dailyLimitReached ? "Daily limit reached" : "Plan a new trip"}
+            </span>
           )}
         </button>
 
@@ -535,7 +569,7 @@ export default function Home() {
                       type="button"
                       onClick={() => openHistory(trip)}
                       aria-label={`Open trip: ${trip.title}`}
-                      className="flex min-w-0 flex-1 items-start gap-3 rounded-xl px-3 py-3 text-left"
+                      className="flex min-w-0 cursor-pointer flex-1 items-start gap-3 rounded-xl px-3 py-3 text-left"
                     >
                       <span className="line-clamp-2 min-w-0 flex-1 text-xs leading-5">
                         {trip.title}
@@ -548,7 +582,7 @@ export default function Home() {
                       disabled={loading}
                       title={`Delete ${trip.title}`}
                       aria-label={`Delete trip: ${trip.title}`}
-                      className="mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#9aa39a] transition hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:cursor-not-allowed disabled:opacity-30 lg:opacity-0 lg:group-hover:opacity-100 lg:focus-visible:opacity-100"
+                      className="mr-1 flex h-8 w-8 cursor-pointer shrink-0 items-center justify-center rounded-lg text-[#9aa39a] transition hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:cursor-not-allowed disabled:opacity-30 lg:opacity-0 lg:group-hover:opacity-100 lg:focus-visible:opacity-100"
                     >
                       <Trash2 size={15} />
                     </button>
@@ -602,7 +636,7 @@ export default function Home() {
                 <button
                   onClick={() => setMobileSidebarOpen(false)}
                   aria-label="Close navigation"
-                  className="flex h-9 w-9 items-center justify-center rounded-lg text-[#718174] hover:bg-[#f1f5ef]"
+                  className="flex h-9 w-9 items-center cursor-pointer justify-center rounded-lg text-[#718174] hover:bg-[#f1f5ef]"
                 >
                   <X size={20} />
                 </button>
@@ -621,7 +655,7 @@ export default function Home() {
               <button
                 onClick={() => setMobileSidebarOpen(true)}
                 aria-label="Open navigation"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#718174] transition hover:bg-[#eaf0e7] hover:text-[#183d31] lg:hidden"
+                className="flex h-9 w-9 shrink-0 items-center cursor-pointer justify-center rounded-lg text-[#718174] transition hover:bg-[#eaf0e7] hover:text-[#183d31] lg:hidden"
               >
                 <Menu size={21} />
               </button>
@@ -633,7 +667,7 @@ export default function Home() {
                   sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
                 }
                 title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#718174] transition hover:bg-[#eaf0e7] hover:text-[#183d31] lg:flex"
+                className="hidden h-9 w-9 shrink-0 items-center cursor-pointer justify-center rounded-lg text-[#718174] transition hover:bg-[#eaf0e7] hover:text-[#183d31] lg:flex"
               >
                 {sidebarCollapsed ? (
                   <PanelLeftOpen size={19} />
@@ -645,7 +679,7 @@ export default function Home() {
               {/* Mobile brand */}
               <button
                 onClick={resetTrip}
-                className="flex min-w-0 items-center gap-2 lg:hidden"
+                className="flex min-w-0 items-center cursor-pointer gap-2 lg:hidden"
                 aria-label="TripSync home"
               >
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#183d31] text-white">
@@ -756,7 +790,7 @@ export default function Home() {
                             cooldownSeconds > 0 ||
                             dailyLimitReached
                           }
-                          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#183d31] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#245442] disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+                          className="inline-flex cursor-pointer w-full items-center justify-center gap-2 rounded-xl bg-[#183d31] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#245442] disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
                         >
                           {loading ? (
                             <LoaderCircle size={16} className="animate-spin" />
@@ -803,7 +837,7 @@ export default function Home() {
                               setPrompt(suggestion.prompt);
                               window.scrollTo?.({ top: 0, behavior: "smooth" });
                             }}
-                            className="group rounded-2xl border border-[#e5e9e1] bg-white p-5 text-left transition hover:-translate-y-0.5 hover:border-[#b8cdb6] hover:shadow-lg hover:shadow-emerald-950/[0.04]"
+                            className="group rounded-2xl border cursor-pointer border-[#e5e9e1] bg-white p-5 text-left transition hover:-translate-y-0.5 hover:border-[#b8cdb6] hover:shadow-lg hover:shadow-emerald-950/[0.04]"
                           >
                             <span className="mb-5 flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef4eb] text-[#4b7655] transition group-hover:bg-[#183d31] group-hover:text-white">
                               <Icon size={19} />
@@ -858,14 +892,32 @@ export default function Home() {
                         Your request and research results, all in one place.
                       </p>
                     </div>
-
-                    <button
-                      onClick={resetTrip}
-                      className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-[#dfe6db] bg-white px-4 py-2.5 text-sm font-semibold transition hover:bg-[#f0f4ec] sm:w-auto"
-                    >
-                      <Plus size={16} />
-                      New trip
-                    </button>
+                    <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+                      <button
+                        onClick={resetTrip}
+                        className="inline-flex w-full shrink-0 cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#dfe6db] bg-white px-4 py-2.5 text-sm font-semibold transition hover:bg-[#f0f4ec] sm:w-auto"
+                      >
+                        <Plus size={16} />
+                        New trip
+                      </button>
+                      {answer && (
+                        <button
+                          type="button"
+                          onClick={handleDownloadPdf}
+                          disabled={downloadingPdf}
+                          className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#dfe6db] bg-white px-4 py-2.5 text-sm font-semibold transition hover:bg-[#f0f4ec] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                        >
+                          {downloadingPdf ? (
+                            <LoaderCircle size={16} className="animate-spin" />
+                          ) : (
+                            <Download size={16} />
+                          )}
+                          {downloadingPdf
+                            ? "Generating PDF..."
+                            : "Download PDF"}
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Loading */}
@@ -907,7 +959,7 @@ export default function Home() {
                         setAnswer("");
                         setError("");
                       }}
-                      className="mt-4 text-xs font-semibold text-[#55795a] hover:text-[#183d31]"
+                      className="mt-4 text-xs cursor-pointer font-semibold text-[#55795a] hover:text-[#183d31]"
                     >
                       Ask for a different trip
                     </button>
@@ -1025,7 +1077,7 @@ export default function Home() {
                           cooldownSeconds > 0 ||
                           dailyLimitReached
                         }
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#183d31] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#245442] disabled:cursor-not-allowed disabled:opacity-40 sm:ml-auto sm:w-auto"
+                        className="inline-flex w-full items-center cursor-pointer justify-center gap-2 rounded-xl bg-[#183d31] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#245442] disabled:cursor-not-allowed disabled:opacity-40 sm:ml-auto sm:w-auto"
                       >
                         {loading ? (
                           <LoaderCircle size={16} className="animate-spin" />
@@ -1097,7 +1149,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setTripToDelete(null)}
-                  className="rounded-xl border border-[#dfe6db] bg-white
+                  className="rounded-xl cursor-pointer border border-[#dfe6db] bg-white
             px-4 py-2.5 text-sm font-semibold text-[#526354]
             transition hover:bg-[#f5f7f2]"
                 >
@@ -1108,7 +1160,7 @@ export default function Home() {
                   type="button"
                   disabled={loading}
                   onClick={() => handleDeleteTrip(tripToDelete)}
-                  className="inline-flex items-center justify-center gap-2
+                  className="inline-flex cursor-pointer items-center justify-center gap-2
             rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold
             text-white transition hover:bg-red-700
             disabled:cursor-not-allowed disabled:opacity-50"

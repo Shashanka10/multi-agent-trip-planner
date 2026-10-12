@@ -96,6 +96,44 @@
   text-underline-offset: 2px;
 }
 
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.875rem;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid #dfe6db;
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown-content th {
+  background: #edf3e9;
+  font-weight: 600;
+}
+
+.markdown-content tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+.markdown-content pre,
+.markdown-content blockquote {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
 @media (max-width: 640px) {
   .markdown-content h1 {
     font-size: 1.4rem;

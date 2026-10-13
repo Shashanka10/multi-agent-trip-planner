@@ -37,6 +37,10 @@ import {
   CircleDollarSignIcon,
   Clock,
   DownloadIcon,
+  WandSparkles,
+  GlobeCode,
+  PlaneTakeoff,
+  MessageCircleCheckIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -197,6 +201,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const [tripToDelete, setTripToDelete] = useState<string | null>(null);
   const [dailyLimitReached, setDailyLimitReached] = useState(false);
@@ -204,6 +209,7 @@ export default function Home() {
   const hasResults = Boolean(answer || loading || error || activeTripId);
 
   const submissionInProgress = useRef(false);
+  const promptInputRef = useRef<HTMLTextAreaElement>(null);
 
   const articleRef = useRef<HTMLElement>(null);
 
@@ -305,17 +311,99 @@ export default function Home() {
   );
 
   const handleDownloadPdf = async () => {
-    if (!articleRef.current) return;
-    const html2pdf = (await import("html2pdf.js")).default; // dynamic import: client-only
-    await html2pdf()
-      .from(articleRef.current)
-      .set({
-        margin: 10,
-        filename: "tripsync-itinerary.pdf",
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: "mm", format: "a4" },
-      })
-      .save();
+    const article = articleRef.current;
+
+    if (!article || downloadingPdf) return;
+
+    setDownloadingPdf(true);
+
+    try {
+      const html2pdf = (await import("html2pdf.js")).default;
+
+      // Wait for web fonts, when supported.
+      if ("fonts" in document) {
+        await document.fonts.ready;
+      }
+
+      // Wait for images inside the itinerary.
+      const images = Array.from(article.querySelectorAll("img"));
+
+      await Promise.all(
+        images.map(
+          (img) =>
+            new Promise<void>((resolve) => {
+              if (img.complete) {
+                resolve();
+                return;
+              }
+
+              img.addEventListener("load", () => resolve(), {
+                once: true,
+              });
+
+              img.addEventListener("error", () => resolve(), {
+                once: true,
+              });
+            }),
+        ),
+      );
+
+      const worker = html2pdf()
+        .set({
+          margin: [10, 10, 18, 10],
+          filename: "tripsync-itinerary.pdf",
+          image: {
+            type: "jpeg",
+            quality: 1,
+          },
+          html2canvas: {
+            scale: 3,
+            useCORS: true,
+            logging: false,
+            scrollX: 0,
+            scrollY: 0,
+            backgroundColor: "#ffffff",
+            windowWidth: article.scrollWidth,
+            windowHeight: article.scrollHeight,
+          },
+          jsPDF: {
+            unit: "mm",
+            format: "a4",
+            orientation: "portrait",
+          },
+        })
+        .from(article)
+        .toPdf();
+
+      const pdf = await worker.get("pdf");
+
+      const totalPages = pdf.internal.getNumberOfPages();
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      for (let page = 1; page <= totalPages; page++) {
+        pdf.setPage(page);
+        pdf.setFontSize(9);
+        pdf.setTextColor(120, 135, 124);
+
+        pdf.text(
+          `Page ${page} of ${totalPages}`,
+          pageWidth / 2,
+          pageHeight - 7,
+          { align: "center" },
+        );
+      }
+
+      pdf.save("tripsync-itinerary.pdf");
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+
+      setError(
+        "Unable to generate the PDF. Please try again or use your browser's Print > Save as PDF option.",
+      );
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -489,7 +577,7 @@ export default function Home() {
           }`}
         >
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#183d31] text-white shadow-lg shadow-emerald-950/10">
-            <Compass size={23} />
+            <GlobeCode size={23} />
           </span>
 
           {!collapsed && (
@@ -667,7 +755,7 @@ export default function Home() {
                 aria-label="TripSync home"
               >
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#183d31] text-white">
-                  <Compass size={18} />
+                  <GlobeCode size={18} />
                 </span>
                 <span className="truncate font-bold tracking-tight">
                   TripSync
@@ -747,6 +835,7 @@ export default function Home() {
                       className="rounded-[22px] border border-[#e1e7dd] bg-white p-2.5 shadow-sm transition focus-within:border-[#91b39a] focus-within:shadow-lg focus-within:shadow-emerald-950/[0.04] sm:rounded-[24px] sm:p-4"
                     >
                       <textarea
+                        ref={promptInputRef}
                         value={prompt}
                         onChange={(event) => setPrompt(event.target.value)}
                         onKeyDown={handlePromptKeyDown}
@@ -758,11 +847,8 @@ export default function Home() {
 
                       <div className="flex flex-col gap-3 border-t border-[#edf0e9] px-2 pt-3 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-xs text-[#9aa39a]">
-                          <span className="hidden sm:inline">
+                          <span className="inline">
                             Be specific about budget, dates, and travel style.
-                          </span>
-                          <span className="sm:hidden">
-                            Shift + Enter for a new line.
                           </span>
                         </p>
 
@@ -804,7 +890,7 @@ export default function Home() {
                   {/* Suggestions */}
                   <section className="mt-9 sm:mt-10">
                     <div className="mb-4 flex items-center gap-2">
-                      <Sparkles size={16} className="text-[#6d9973]" />
+                      <WandSparkles size={16} className="text-[#6d9973]" />
                       <h2 className="text-sm font-bold">
                         Need a little inspiration?
                       </h2>
@@ -819,7 +905,15 @@ export default function Home() {
                             key={suggestion.title}
                             onClick={() => {
                               setPrompt(suggestion.prompt);
-                              window.scrollTo?.({ top: 0, behavior: "smooth" });
+                              requestAnimationFrame(() => {
+                                promptInputRef.current?.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "center",
+                                });
+                              });
+                              promptInputRef.current?.focus({
+                                preventScroll: true,
+                              });
                             }}
                             className="group rounded-2xl border cursor-pointer border-[#e5e9e1] bg-white p-5 text-left transition hover:-translate-y-0.5 hover:border-[#b8cdb6] hover:shadow-lg hover:shadow-emerald-950/[0.04]"
                           >
@@ -865,31 +959,42 @@ export default function Home() {
                   {/* Results heading */}
                   <div className="mb-6 flex flex-col justify-between gap-4 sm:mb-7 sm:flex-row sm:items-start">
                     <div>
-                      <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-[#66866a]">
-                        <Sparkles size={14} />
+                      <div className="mb-2 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.15em] text-[#66866a]">
+                        <PlaneTakeoff size={14} />
                         Your travel plan
                       </div>
                       <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
                         Let&apos;s make it happen.
                       </h1>
                       <p className="mt-2 max-w-xl text-sm leading-6 text-[#859084]">
-                        Your request and research results, all in one place.
+                        Your request and personalized plan, all in one place.
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                       <button
                         onClick={resetTrip}
-                        className="inline-flex w-full shrink-0 cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#dfe6db] bg-white px-4 py-2.5 text-sm font-semibold transition hover:bg-[#f0f4ec] sm:w-auto"
+                        className="inline-flex w-full shrink-0 cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#315c42] bg-[#315c42] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#264a34] sm:w-auto"
                       >
                         <Plus size={16} />
                         New trip
                       </button>
                       <button
+                        type="button"
                         onClick={handleDownloadPdf}
-                        className="inline-flex w-full shrink-0 cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#dfe6db] bg-white px-4 py-2.5 text-sm font-semibold transition hover:bg-[#f0f4ec] sm:w-auto"
+                        disabled={downloadingPdf || !answer}
+                        className="inline-flex w-full shrink-0 cursor-pointer items-center
+    justify-center gap-2 rounded-xl border border-[#dfe6db]
+    bg-white px-4 py-2.5 text-sm font-semibold transition
+    hover:bg-[#f0f4ec] disabled:cursor-not-allowed
+    disabled:opacity-50 sm:w-auto"
                       >
-                        <DownloadIcon size={16} />
-                        Download PDF
+                        {downloadingPdf ? (
+                          <LoaderCircle size={16} className="animate-spin" />
+                        ) : (
+                          <DownloadIcon size={16} />
+                        )}
+
+                        {downloadingPdf ? "Generating PDF..." : "Download PDF"}
                       </button>
                     </div>
                   </div>
@@ -913,8 +1018,7 @@ export default function Home() {
                         <div className="h-full w-1/2 animate-pulse rounded-full bg-[#588260]" />
                       </div>
                       <p className="mt-3 text-xs text-[#9aa39a]">
-                        Your plan will appear when the backend finishes
-                        processing.
+                        Putting together your perfect getaway. Wait a moment.
                       </p>
                     </div>
                   )}
@@ -922,7 +1026,10 @@ export default function Home() {
                   {/* Original request */}
                   <div className="mb-5 rounded-2xl border border-[#e1e7dd] bg-white p-4 sm:mb-6 sm:p-6">
                     <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#849084]">
-                      <MessageCircle size={15} />
+                      <MessageCircleCheckIcon
+                        size={15}
+                        className="text-[#074f14]"
+                      />
                       Your request
                     </div>
                     <p className="whitespace-pre-wrap break-words text-sm leading-7 text-[#34473a]">
@@ -1022,8 +1129,8 @@ export default function Home() {
                   )}
 
                   {!loading && !answer && !error && (
-                    <div className="rounded-2xl border border-[#e1e7dd] bg-white p-5 text-sm leading-6 text-[#879187]">
-                      Enter your trip details below to get started.
+                    <div className="rounded-2xl border border-[#e1e7dd] bg-[#e9eae8] p-5 text-sm leading-6 text-[#879187]">
+                      Edit your trip details below to get started.
                     </div>
                   )}
 
@@ -1033,6 +1140,7 @@ export default function Home() {
                     className="mt-5 rounded-2xl border border-[#e1e7dd] bg-white p-3 shadow-sm transition focus-within:border-[#91b39a] sm:mt-6 sm:p-4"
                   >
                     <textarea
+                      ref={promptInputRef}
                       value={prompt}
                       onChange={(event) => setPrompt(event.target.value)}
                       onKeyDown={handlePromptKeyDown}
@@ -1043,7 +1151,7 @@ export default function Home() {
                     />
                     <div className="flex flex-col gap-3 border-t border-[#edf0e9] pt-3 sm:flex-row sm:items-center sm:justify-between">
                       <p className="hidden text-xs text-[#9aa39a] sm:block">
-                        Shift + Enter for a new line
+                        Be specific about budget, dates, and travel style.
                       </p>
 
                       <button
